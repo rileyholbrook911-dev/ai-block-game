@@ -1,0 +1,108 @@
+<!DOCTYPE html><html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Mini Block Game</title>
+  <style>
+    body { margin: 0; overflow: hidden; background: #111; }
+    canvas { display: block; }
+    #controls {
+      position: fixed;
+      bottom: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: grid;
+      grid-template-columns: 60px 60px 60px;
+      gap: 10px;
+    }
+    .btn {
+      width: 60px;
+      height: 60px;
+      background: #333;
+      color: white;
+      font-size: 20px;
+      border-radius: 10px;
+      text-align: center;
+      line-height: 60px;
+      user-select: none;
+    }
+  </style>
+</head>
+<body>
+<canvas id="game"></canvas><div id="controls">
+  <div></div>
+  <div class="btn" ontouchstart="move('up')">⬆️</div>
+  <div></div>
+  <div class="btn" ontouchstart="move('left')">⬅️</div>
+  <div class="btn" ontouchstart="move('down')">⬇️</div>
+  <div class="btn" ontouchstart="move('right')">➡️</div>
+</div><script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+const tileSize = 40;
+const cols = Math.floor(canvas.width / tileSize);
+const rows = Math.floor(canvas.height / tileSize);
+
+let world = [];
+
+for (let y = 0; y < rows; y++) {
+  let row = [];
+  for (let x = 0; x < cols; x++) {
+    row.push(Math.random() < 0.1 ? 'tree' : 'grass');
+  }
+  world.push(row);
+}
+
+let player = { x: 2, y: 2 };
+let ai = { x: 5, y: 5 };
+
+function move(dir) {
+  if (dir === 'up') player.y--;
+  if (dir === 'down') player.y++;
+  if (dir === 'left') player.x--;
+  if (dir === 'right') player.x++;
+}
+
+function aiThink() {
+  // Simple AI: follow player
+  if (ai.x < player.x) ai.x++;
+  else if (ai.x > player.x) ai.x--;
+
+  if (ai.y < player.y) ai.y++;
+  else if (ai.y > player.y) ai.y--;
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      if (world[y][x] === 'grass') ctx.fillStyle = '#4caf50';
+      if (world[y][x] === 'tree') ctx.fillStyle = '#2e7d32';
+
+      ctx.fillRect(x * tileSize, y * tileSize, tileSize, tileSize);
+    }
+  }
+
+  // Player
+  ctx.fillStyle = 'blue';
+  ctx.fillRect(player.x * tileSize, player.y * tileSize, tileSize, tileSize);
+
+  // AI
+  ctx.fillStyle = 'red';
+  ctx.fillRect(ai.x * tileSize, ai.y * tileSize, tileSize, tileSize);
+}
+
+function gameLoop() {
+  aiThink();
+  draw();
+  requestAnimationFrame(gameLoop);
+}
+
+gameLoop();
+</script></body>
+</html>
