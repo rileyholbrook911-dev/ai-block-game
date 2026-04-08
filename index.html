@@ -2,107 +2,118 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Mini Block Game</title>
+  <title>AI Block Game+</title>
   <style>
-    body { margin: 0; overflow: hidden; background: #111; }
-    canvas { display: block; }
-    #controls {
-      position: fixed;
-      bottom: 10px;
-      left: 50%;
-      transform: translateX(-50%);
-      display: grid;
-      grid-template-columns: 60px 60px 60px;
-      gap: 10px;
+    body { margin:0; overflow:hidden; background:#111; font-family:sans-serif; }
+    canvas { display:block; }
+    #ui {
+      position:fixed; bottom:10px; left:50%; transform:translateX(-50%);
+      display:flex; gap:10px; align-items:center;
     }
     .btn {
-      width: 60px;
-      height: 60px;
-      background: #333;
-      color: white;
-      font-size: 20px;
-      border-radius: 10px;
-      text-align: center;
-      line-height: 60px;
-      user-select: none;
+      width:60px; height:60px; background:#333; color:#fff;
+      border-radius:12px; display:flex; align-items:center; justify-content:center;
+      font-size:18px; user-select:none;
     }
+    #info { position:fixed; top:10px; left:10px; color:#fff; font-size:14px; }
   </style>
 </head>
 <body>
-<canvas id="game"></canvas><div id="controls">
-  <div></div>
+<canvas id="game"></canvas>
+<div id="info"></div><div id="ui">
   <div class="btn" ontouchstart="move('up')">⬆️</div>
-  <div></div>
   <div class="btn" ontouchstart="move('left')">⬅️</div>
   <div class="btn" ontouchstart="move('down')">⬇️</div>
   <div class="btn" ontouchstart="move('right')">➡️</div>
+  <div class="btn" ontouchstart="mine()">⛏️</div>
 </div><script>
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
-
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
 const tileSize = 40;
-const cols = Math.floor(canvas.width / tileSize);
-const rows = Math.floor(canvas.height / tileSize);
+const worldSize = 50;
+let camera = {x:0,y:0};
 
 let world = [];
-
-for (let y = 0; y < rows; y++) {
-  let row = [];
-  for (let x = 0; x < cols; x++) {
-    row.push(Math.random() < 0.1 ? 'tree' : 'grass');
+for(let y=0;y<worldSize;y++){
+  let row=[];
+  for(let x=0;x<worldSize;x++){
+    row.push(Math.random()<0.15?'tree':'grass');
   }
   world.push(row);
 }
 
-let player = { x: 2, y: 2 };
-let ai = { x: 5, y: 5 };
+let player={x:10,y:10,inv:{wood:0}};
+let ai={x:12,y:12,inv:{wood:0}};
 
-function move(dir) {
-  if (dir === 'up') player.y--;
-  if (dir === 'down') player.y++;
-  if (dir === 'left') player.x--;
-  if (dir === 'right') player.x++;
+function move(dir){
+  if(dir==='up') player.y--;
+  if(dir==='down') player.y++;
+  if(dir==='left') player.x--;
+  if(dir==='right') player.x++;
 }
 
-function aiThink() {
-  // Simple AI: follow player
-  if (ai.x < player.x) ai.x++;
-  else if (ai.x > player.x) ai.x--;
-
-  if (ai.y < player.y) ai.y++;
-  else if (ai.y > player.y) ai.y--;
+function mine(){
+  let tile = world[player.y]?.[player.x];
+  if(tile==='tree'){
+    world[player.y][player.x]='grass';
+    player.inv.wood++;
+  }
 }
 
-function draw() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+function aiThink(){
+  // If near tree → mine
+  let tile = world[ai.y]?.[ai.x];
+  if(tile==='tree'){
+    world[ai.y][ai.x]='grass';
+    ai.inv.wood++;
+    return;
+  }
+  // Otherwise follow player
+  if(ai.x<player.x) ai.x++;
+  else if(ai.x>player.x) ai.x--;
+  if(ai.y<player.y) ai.y++;
+  else if(ai.y>player.y) ai.y--;
+}
 
-  for (let y = 0; y < rows; y++) {
-    for (let x = 0; x < cols; x++) {
-      if (world[y][x] === 'grass') ctx.fillStyle = '#4caf50';
-      if (world[y][x] === 'tree') ctx.fillStyle = '#2e7d32';
+function draw(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
 
-      ctx.fillRect(x * tileSize, y * tileSize, tileSize, tileSize);
+  camera.x = player.x*tileSize - canvas.width/2;
+  camera.y = player.y*tileSize - canvas.height/2;
+
+  for(let y=0;y<worldSize;y++){
+    for(let x=0;x<worldSize;x++){
+      let screenX = x*tileSize - camera.x;
+      let screenY = y*tileSize - camera.y;
+
+      if(world[y][x]==='grass') ctx.fillStyle='#4caf50';
+      if(world[y][x]==='tree') ctx.fillStyle='#2e7d32';
+
+      ctx.fillRect(screenX,screenY,tileSize,tileSize);
     }
   }
 
   // Player
-  ctx.fillStyle = 'blue';
-  ctx.fillRect(player.x * tileSize, player.y * tileSize, tileSize, tileSize);
+  ctx.fillStyle='blue';
+  ctx.fillRect(player.x*tileSize-camera.x,player.y*tileSize-camera.y,tileSize,tileSize);
 
   // AI
-  ctx.fillStyle = 'red';
-  ctx.fillRect(ai.x * tileSize, ai.y * tileSize, tileSize, tileSize);
+  ctx.fillStyle='red';
+  ctx.fillRect(ai.x*tileSize-camera.x,ai.y*tileSize-camera.y,tileSize,tileSize);
+
+  document.getElementById('info').innerText =
+    `You: ${player.inv.wood} wood | AI: ${ai.inv.wood} wood`;
 }
 
-function gameLoop() {
+function loop(){
   aiThink();
   draw();
-  requestAnimationFrame(gameLoop);
+  requestAnimationFrame(loop);
 }
 
-gameLoop();
+loop();
 </script></body>
 </html>
