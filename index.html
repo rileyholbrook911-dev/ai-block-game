@@ -2,20 +2,17 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>AI Block Game 3D FPS</title>
+<title>AI Block Game - Mining</title>
 <style>
 body { margin:0; overflow:hidden; background:black; }
-canvas { display:block; }#moveJoy { position:fixed; bottom:30px; left:30px; width:110px; height:110px; background:rgba(255,255,255,0.1); border-radius:50%; } #lookJoy { position:fixed; bottom:30px; right:30px; width:110px; height:110px; background:rgba(255,255,255,0.1); border-radius:50%; }
+canvas { display:block; }#moveJoy { position:fixed; bottom:30px; left:30px; width:120px; height:120px; background:rgba(255,255,255,0.1); border-radius:50%; } .stick { width:50px; height:50px; background:#fff; border-radius:50%; position:absolute; left:35px; top:35px; }
 
-.stick { width:40px; height:40px; background:#fff; border-radius:50%; position:absolute; left:35px; top:35px; }
-
-#jumpBtn { position:fixed; bottom:160px; right:50px; width:70px; height:70px; background:rgba(255,255,255,0.2); border-radius:50%; color:white; font-size:20px; display:flex; align-items:center; justify-content:center; }
+#jumpBtn { position:fixed; bottom:140px; right:40px; width:70px; height:70px; background:rgba(255,255,255,0.2); border-radius:50%; display:flex; align-items:center; justify-content:center; color:white; font-size:22px; }
 
 #crosshair { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); color:white; font-size:20px; } </style>
 
 </head>
 <body><div id="moveJoy"><div class="stick" id="moveStick"></div></div>
-<div id="lookJoy"><div class="stick" id="lookStick"></div></div>
 <div id="jumpBtn">↑</div>
 <div id="crosshair">+</div><script src="https://unpkg.com/three@0.152.2/build/three.min.js"></script><script>
 const scene = new THREE.Scene();
@@ -24,146 +21,130 @@ const renderer = new THREE.WebGLRenderer();
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
 
+const raycaster = new THREE.Raycaster();
+const center = new THREE.Vector2(0,0);
+
 const light = new THREE.DirectionalLight(0xffffff,1);
 light.position.set(5,10,5);
 scene.add(light);
 
-const ground = new THREE.Mesh(
-  new THREE.PlaneGeometry(100,100),
-  new THREE.MeshLambertMaterial({color:0x4caf50})
-);
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(100,100), new THREE.MeshLambertMaterial({color:0x4caf50}));
 ground.rotation.x = -Math.PI/2;
 scene.add(ground);
 
-let player = {x:0, z:0, y:1.6, velocityY:0, grounded:true, radius:0.4};
-let rotation = {yaw:0, pitch:0};
+let player = {x:0,z:0,y:1.6,velocityY:0,grounded:true,radius:0.4};
+let rotation = {yaw:0,pitch:0};
 
-// Store tree collision boxes
 let trees = [];
+let collectibles = [];
 
-for(let i=0;i<20;i++){
-  let x = (Math.random()-0.5)*20;
-  let z = (Math.random()-0.5)*20;
-
-  const trunk = new THREE.Mesh(
-    new THREE.BoxGeometry(0.8,2,0.8),
-    new THREE.MeshLambertMaterial({color:0x8B4513})
-  );
+function createTree(x,z){
+  const trunk = new THREE.Mesh(new THREE.BoxGeometry(0.8,2,0.8), new THREE.MeshLambertMaterial({color:0x8B4513}));
   trunk.position.set(x,1,z);
+  trunk.userData.type = 'tree';
 
-  const leaves = new THREE.Mesh(
-    new THREE.BoxGeometry(2,2,2),
-    new THREE.MeshLambertMaterial({color:0x2e7d32})
-  );
+  const leaves = new THREE.Mesh(new THREE.BoxGeometry(2,2,2), new THREE.MeshLambertMaterial({color:0x2e7d32}));
   leaves.position.set(x,3,z);
 
   scene.add(trunk);
   scene.add(leaves);
 
-  // collision (simple square bounds)
-  trees.push({x:x, z:z, size:0.8});
+  trees.push({mesh:trunk,x,z,size:0.8});
 }
 
-const ai = new THREE.Mesh(
-  new THREE.BoxGeometry(1,1,1),
-  new THREE.MeshLambertMaterial({color:0xff0000})
-);
-ai.position.set(3,0.5,3);
-scene.add(ai);
+for(let i=0;i<15;i++) createTree((Math.random()-0.5)*20,(Math.random()-0.5)*20);
 
-function setupJoystick(baseId, stickId, output){
-  const base = document.getElementById(baseId);
-  const stick = document.getElementById(stickId);
-
-  base.addEventListener('touchmove', e=>{
-    const rect = base.getBoundingClientRect();
-    const x = e.touches[0].clientX - rect.left - rect.width/2;
-    const y = e.touches[0].clientY - rect.top - rect.height/2;
-
-    output.x = x/40;
-    output.y = y/40;
-
-    stick.style.left = (35 + x/2) + 'px';
-    stick.style.top = (35 + y/2) + 'px';
-  });
-
-  base.addEventListener('touchend', ()=>{
-    output.x = 0; output.y = 0;
-    stick.style.left = '35px';
-    stick.style.top = '35px';
-  });
+// collectible
+function spawnItem(x,z){
+  const item = new THREE.Mesh(new THREE.BoxGeometry(0.4,0.4,0.4), new THREE.MeshLambertMaterial({color:0xffff00}));
+  item.position.set(x,1,z);
+  scene.add(item);
+  collectibles.push(item);
 }
 
-let move = {x:0,y:0};
-let look = {x:0,y:0};
+// controls
+let move={x:0,y:0};
+const base=document.getElementById('moveJoy');
+const stick=document.getElementById('moveStick');
 
-setupJoystick('moveJoy','moveStick',move);
-setupJoystick('lookJoy','lookStick',look);
+base.addEventListener('touchmove', e=>{
+  const rect=base.getBoundingClientRect();
+  const x=e.touches[0].clientX-rect.left-rect.width/2;
+  const y=e.touches[0].clientY-rect.top-rect.height/2;
+  move.x=x/50; move.y=y/50;
+  stick.style.left=(35+x/2)+'px';
+  stick.style.top=(35+y/2)+'px';
+});
+base.addEventListener('touchend', ()=>{move.x=0;move.y=0;stick.style.left='35px';stick.style.top='35px';});
 
-const jumpBtn = document.getElementById('jumpBtn');
-jumpBtn.addEventListener('touchstart', ()=>{
-  if(player.grounded){
-    player.velocityY = 0.25;
-    player.grounded = false;
+let touching=false;
+document.addEventListener('touchstart', e=>{if(e.target.id!=='moveJoy') touching=true;});
+document.addEventListener('touchmove', e=>{if(touching){rotation.yaw-=e.touches[0].movementX*0.002||0;rotation.pitch-=e.touches[0].movementY*0.002||0;}});
+document.addEventListener('touchend', ()=>touching=false);
+
+// jump
+const jumpBtn=document.getElementById('jumpBtn');
+jumpBtn.addEventListener('touchstart', ()=>{if(player.grounded){player.velocityY=0.25;player.grounded=false;}});
+
+// mining (tap screen)
+document.addEventListener('click', ()=>{
+  raycaster.setFromCamera(center,camera);
+  const intersects = raycaster.intersectObjects(scene.children);
+
+  for(let hit of intersects){
+    if(hit.object.userData.type==='tree'){
+      scene.remove(hit.object);
+      spawnItem(hit.object.position.x, hit.object.position.z);
+      break;
+    }
   }
 });
 
-function checkCollision(nx, nz){
+function checkCollision(nx,nz){
   for(let t of trees){
-    let dx = nx - t.x;
-    let dz = nz - t.z;
-    let dist = Math.sqrt(dx*dx + dz*dz);
-
-    if(dist < player.radius + t.size/2){
-      return true;
-    }
+    let dx=nx-t.x, dz=nz-t.z;
+    if(Math.sqrt(dx*dx+dz*dz)<player.radius+t.size/2) return true;
   }
   return false;
-}
-
-function aiThink(){
-  const dx = player.x - ai.position.x;
-  const dz = player.z - ai.position.z;
-  ai.position.x += dx * 0.01;
-  ai.position.z += dz * 0.01;
 }
 
 function animate(){
   requestAnimationFrame(animate);
 
-  let newX = player.x;
-  let newZ = player.z;
+  let newX=player.x;
+  let newZ=player.z;
 
-  newX += Math.sin(rotation.yaw) * move.y * 0.1;
-  newZ += Math.cos(rotation.yaw) * move.y * 0.1;
-  newX += Math.cos(rotation.yaw) * move.x * 0.1;
-  newZ -= Math.sin(rotation.yaw) * move.x * 0.1;
+  newX+=Math.sin(rotation.yaw)*move.y*0.1;
+  newZ+=Math.cos(rotation.yaw)*move.y*0.1;
+  newX+=Math.cos(rotation.yaw)*move.x*0.1;
+  newZ-=Math.sin(rotation.yaw)*move.x*0.1;
 
-  // collision check
-  if(!checkCollision(newX, player.z)) player.x = newX;
-  if(!checkCollision(player.x, newZ)) player.z = newZ;
+  if(!checkCollision(newX,player.z)) player.x=newX;
+  if(!checkCollision(player.x,newZ)) player.z=newZ;
 
-  rotation.yaw -= look.x * 0.03;
-  rotation.pitch -= look.y * 0.03;
-  rotation.pitch = Math.max(-1.5, Math.min(1.5, rotation.pitch));
+  player.velocityY-=0.01;
+  player.y+=player.velocityY;
+  if(player.y<=1.6){player.y=1.6;player.velocityY=0;player.grounded=true;}
 
-  player.velocityY -= 0.01;
-  player.y += player.velocityY;
+  camera.position.set(player.x,player.y,player.z);
+  camera.rotation.order='YXZ';
+  camera.rotation.y=rotation.yaw;
+  camera.rotation.x=rotation.pitch;
 
-  if(player.y <= 1.6){
-    player.y = 1.6;
-    player.velocityY = 0;
-    player.grounded = true;
-  }
+  // animate collectibles
+  collectibles.forEach(item=>{
+    item.rotation.y += 0.05;
+    item.position.y = 1 + Math.sin(Date.now()*0.005)*0.2;
 
-  camera.position.set(player.x, player.y, player.z);
-  camera.rotation.order = 'YXZ';
-  camera.rotation.y = rotation.yaw;
-  camera.rotation.x = rotation.pitch;
+    // pickup
+    let dx = player.x - item.position.x;
+    let dz = player.z - item.position.z;
+    if(Math.sqrt(dx*dx+dz*dz)<1){
+      scene.remove(item);
+    }
+  });
 
-  aiThink();
-
-  renderer.render(scene, camera);
+  renderer.render(scene,camera);
 }
 
 animate();
