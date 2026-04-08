@@ -2,19 +2,34 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>AI Block Game - Mining</title>
+<title>AI Block Game - Full UI</title>
 <style>
 body { margin:0; overflow:hidden; background:black; }
 canvas { display:block; }#moveJoy { position:fixed; bottom:30px; left:30px; width:120px; height:120px; background:rgba(255,255,255,0.1); border-radius:50%; } .stick { width:50px; height:50px; background:#fff; border-radius:50%; position:absolute; left:35px; top:35px; }
 
 #jumpBtn { position:fixed; bottom:140px; right:40px; width:70px; height:70px; background:rgba(255,255,255,0.2); border-radius:50%; display:flex; align-items:center; justify-content:center; color:white; font-size:22px; }
 
-#crosshair { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); color:white; font-size:20px; } </style>
+#crosshair { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); color:white; font-size:20px; }
+
+#hotbar { position:fixed; bottom:10px; left:50%; transform:translateX(-50%); display:flex; gap:8px; }
+
+.slot { width:50px; height:50px; border:2px solid rgba(255,255,255,0.4); background:rgba(0,0,0,0.4); }
+
+.slot.selected { border:3px solid white; }
+
+#inventoryCount { position:fixed; bottom:70px; left:50%; transform:translateX(-50%); color:white; font-size:18px; } </style>
 
 </head>
 <body><div id="moveJoy"><div class="stick" id="moveStick"></div></div>
 <div id="jumpBtn">↑</div>
-<div id="crosshair">+</div><script src="https://unpkg.com/three@0.152.2/build/three.min.js"></script><script>
+<div id="crosshair">+</div>
+<div id="inventoryCount">Wood: 0</div><div id="hotbar">
+  <div class="slot selected"></div>
+  <div class="slot"></div>
+  <div class="slot"></div>
+  <div class="slot"></div>
+  <div class="slot"></div>
+</div><script src="https://unpkg.com/three@0.152.2/build/three.min.js"></script><script>
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
 const renderer = new THREE.WebGLRenderer();
@@ -34,6 +49,7 @@ scene.add(ground);
 
 let player = {x:0,z:0,y:1.6,velocityY:0,grounded:true,radius:0.4};
 let rotation = {yaw:0,pitch:0};
+let wood = 0;
 
 let trees = [];
 let collectibles = [];
@@ -54,7 +70,6 @@ function createTree(x,z){
 
 for(let i=0;i<15;i++) createTree((Math.random()-0.5)*20,(Math.random()-0.5)*20);
 
-// collectible
 function spawnItem(x,z){
   const item = new THREE.Mesh(new THREE.BoxGeometry(0.4,0.4,0.4), new THREE.MeshLambertMaterial({color:0xffff00}));
   item.position.set(x,1,z);
@@ -62,7 +77,6 @@ function spawnItem(x,z){
   collectibles.push(item);
 }
 
-// controls
 let move={x:0,y:0};
 const base=document.getElementById('moveJoy');
 const stick=document.getElementById('moveStick');
@@ -78,23 +92,42 @@ base.addEventListener('touchmove', e=>{
 base.addEventListener('touchend', ()=>{move.x=0;move.y=0;stick.style.left='35px';stick.style.top='35px';});
 
 let touching=false;
-document.addEventListener('touchstart', e=>{if(e.target.id!=='moveJoy') touching=true;});
-document.addEventListener('touchmove', e=>{if(touching){rotation.yaw-=e.touches[0].movementX*0.002||0;rotation.pitch-=e.touches[0].movementY*0.002||0;}});
+let lastX=0,lastY=0;
+
+document.addEventListener('touchstart', e=>{
+  if(e.target.id!=='moveJoy'){
+    touching=true;
+    lastX=e.touches[0].clientX;
+    lastY=e.touches[0].clientY;
+  }
+});
+
+document.addEventListener('touchmove', e=>{
+  if(touching){
+    let dx=e.touches[0].clientX-lastX;
+    let dy=e.touches[0].clientY-lastY;
+    rotation.yaw-=dx*0.003;
+    rotation.pitch-=dy*0.003;
+    rotation.pitch=Math.max(-1.5,Math.min(1.5,rotation.pitch));
+    lastX=e.touches[0].clientX;
+    lastY=e.touches[0].clientY;
+  }
+});
+
 document.addEventListener('touchend', ()=>touching=false);
 
-// jump
 const jumpBtn=document.getElementById('jumpBtn');
-jumpBtn.addEventListener('touchstart', ()=>{if(player.grounded){player.velocityY=0.25;player.grounded=false;}});
+jumpBtn.addEventListener('touchstart', ()=>{
+  if(player.grounded){player.velocityY=0.25;player.grounded=false;}
+});
 
-// mining (tap screen)
 document.addEventListener('click', ()=>{
   raycaster.setFromCamera(center,camera);
-  const intersects = raycaster.intersectObjects(scene.children);
-
-  for(let hit of intersects){
-    if(hit.object.userData.type==='tree'){
-      scene.remove(hit.object);
-      spawnItem(hit.object.position.x, hit.object.position.z);
+  const hits=raycaster.intersectObjects(scene.children);
+  for(let h of hits){
+    if(h.object.userData.type==='tree'){
+      scene.remove(h.object);
+      spawnItem(h.object.position.x,h.object.position.z);
       break;
     }
   }
@@ -102,7 +135,7 @@ document.addEventListener('click', ()=>{
 
 function checkCollision(nx,nz){
   for(let t of trees){
-    let dx=nx-t.x, dz=nz-t.z;
+    let dx=nx-t.x,dz=nz-t.z;
     if(Math.sqrt(dx*dx+dz*dz)<player.radius+t.size/2) return true;
   }
   return false;
@@ -131,16 +164,17 @@ function animate(){
   camera.rotation.y=rotation.yaw;
   camera.rotation.x=rotation.pitch;
 
-  // animate collectibles
-  collectibles.forEach(item=>{
-    item.rotation.y += 0.05;
-    item.position.y = 1 + Math.sin(Date.now()*0.005)*0.2;
+  collectibles.forEach((item,i)=>{
+    item.rotation.y+=0.05;
+    item.position.y=1+Math.sin(Date.now()*0.005)*0.2;
 
-    // pickup
-    let dx = player.x - item.position.x;
-    let dz = player.z - item.position.z;
+    let dx=player.x-item.position.x;
+    let dz=player.z-item.position.z;
     if(Math.sqrt(dx*dx+dz*dz)<1){
       scene.remove(item);
+      collectibles.splice(i,1);
+      wood++;
+      document.getElementById('inventoryCount').innerText='Wood: '+wood;
     }
   });
 
