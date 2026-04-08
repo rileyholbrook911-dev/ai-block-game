@@ -2,107 +2,144 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>AI Block Game - Full UI</title>
+<title>AI Block Game - Blocks + Building</title>
 <style>
 body { margin:0; overflow:hidden; background:black; }
 canvas { display:block; }#moveJoy { position:fixed; bottom:30px; left:30px; width:120px; height:120px; background:rgba(255,255,255,0.1); border-radius:50%; } .stick { width:50px; height:50px; background:#fff; border-radius:50%; position:absolute; left:35px; top:35px; }
 
 #jumpBtn { position:fixed; bottom:140px; right:40px; width:70px; height:70px; background:rgba(255,255,255,0.2); border-radius:50%; display:flex; align-items:center; justify-content:center; color:white; font-size:22px; }
 
+#placeBtn { position:fixed; bottom:220px; right:40px; width:70px; height:70px; background:rgba(0,255,0,0.3); border-radius:50%; display:flex; align-items:center; justify-content:center; color:white; font-size:18px; }
+
 #crosshair { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); color:white; font-size:20px; }
 
-#hotbar { position:fixed; bottom:10px; left:50%; transform:translateX(-50%); display:flex; gap:8px; }
-
-.slot { width:50px; height:50px; border:2px solid rgba(255,255,255,0.4); background:rgba(0,0,0,0.4); }
-
-.slot.selected { border:3px solid white; }
-
-#inventoryCount { position:fixed; bottom:70px; left:50%; transform:translateX(-50%); color:white; font-size:18px; } </style>
+#inventoryCount { position:fixed; bottom:70px; left:50%; transform:translateX(-50%); color:white; } </style>
 
 </head>
 <body><div id="moveJoy"><div class="stick" id="moveStick"></div></div>
 <div id="jumpBtn">↑</div>
+<div id="placeBtn">⬛</div>
 <div id="crosshair">+</div>
-<div id="inventoryCount">Wood: 0</div><div id="hotbar">
-  <div class="slot selected"></div>
-  <div class="slot"></div>
-  <div class="slot"></div>
-  <div class="slot"></div>
-  <div class="slot"></div>
-</div><script src="https://unpkg.com/three@0.152.2/build/three.min.js"></script><script>
-const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
-const renderer = new THREE.WebGLRenderer();
-renderer.setSize(window.innerWidth, window.innerHeight);
+<div id="inventoryCount">Wood: 0</div><script src="https://unpkg.com/three@0.152.2/build/three.min.js"></script><script>
+const scene=new THREE.Scene();
+const camera=new THREE.PerspectiveCamera(75,window.innerWidth/window.innerHeight,0.1,1000);
+const renderer=new THREE.WebGLRenderer();
+renderer.setSize(window.innerWidth,window.innerHeight);
 document.body.appendChild(renderer.domElement);
 
-const raycaster = new THREE.Raycaster();
-const center = new THREE.Vector2(0,0);
+const raycaster=new THREE.Raycaster();
+const center=new THREE.Vector2(0,0);
 
-const light = new THREE.DirectionalLight(0xffffff,1);
+const light=new THREE.DirectionalLight(0xffffff,1);
 light.position.set(5,10,5);
 scene.add(light);
 
-const ground = new THREE.Mesh(new THREE.PlaneGeometry(100,100), new THREE.MeshLambertMaterial({color:0x4caf50}));
-ground.rotation.x = -Math.PI/2;
+const ground=new THREE.Mesh(new THREE.PlaneGeometry(100,100),new THREE.MeshLambertMaterial({color:0x4caf50}));
+ground.rotation.x=-Math.PI/2;
 scene.add(ground);
 
-let player = {x:0,z:0,y:1.6,velocityY:0,grounded:true,radius:0.4};
-let rotation = {yaw:0,pitch:0};
-let wood = 0;
+let player={x:0,z:0,y:1.6,velocityY:0,grounded:true};
+let rotation={yaw:0,pitch:0};
+let wood=0;
 
-let trees = [];
-let collectibles = [];
+let blocks=[];
+let items=[];
 
-function createTree(x,z){
-  const trunk = new THREE.Mesh(new THREE.BoxGeometry(0.8,2,0.8), new THREE.MeshLambertMaterial({color:0x8B4513}));
-  trunk.position.set(x,1,z);
-  trunk.userData.type = 'tree';
-
-  const leaves = new THREE.Mesh(new THREE.BoxGeometry(2,2,2), new THREE.MeshLambertMaterial({color:0x2e7d32}));
-  leaves.position.set(x,3,z);
-
-  scene.add(trunk);
-  scene.add(leaves);
-
-  trees.push({mesh:trunk,x,z,size:0.8});
+function addBlock(x,y,z,color,type){
+  const mesh=new THREE.Mesh(new THREE.BoxGeometry(1,1,1),new THREE.MeshLambertMaterial({color}));
+  mesh.position.set(x,y,z);
+  mesh.userData.type=type;
+  scene.add(mesh);
+  blocks.push(mesh);
 }
 
-for(let i=0;i<15;i++) createTree((Math.random()-0.5)*20,(Math.random()-0.5)*20);
+// generate basic terrain (height variation)
+function getHeight(x,z){
+  return Math.floor(Math.sin(x*0.3)*2 + Math.cos(z*0.3)*2);
+}
 
-function spawnItem(x,z){
-  const item = new THREE.Mesh(new THREE.BoxGeometry(0.4,0.4,0.4), new THREE.MeshLambertMaterial({color:0xffff00}));
-  item.position.set(x,1,z);
+// terrain blocks
+for(let x=-20;x<=20;x++){
+  for(let z=-20;z<=20;z++){
+    let h = getHeight(x,z);
+    for(let y=0;y<=h;y++){
+      addBlock(x,y,z, y===h ? 0x4caf50 : 0x795548, 'ground');
+    }
+  }
+}
+
+// generate trees on terrain
+for(let i=0;i<10;i++){
+  let x=Math.floor((Math.random()-0.5)*20);
+  let z=Math.floor((Math.random()-0.5)*20);
+  let baseY = getHeight(x,z)+1;
+
+  // trunk
+  for(let y=0;y<3;y++){
+    addBlock(x,baseY+y,z,0x8B4513,'wood');
+  }
+
+  // leaves
+  for(let lx=-1;lx<=1;lx++){
+    for(let lz=-1;lz<=1;lz++){
+      for(let ly=2;ly<=3;ly++){
+        addBlock(x+lx,baseY+ly,z+lz,0x2e7d32,'leaf');
+      }
+    }
+  }
+}
+
+  // leaves cube
+  for(let lx=-1;lx<=1;lx++){
+    for(let lz=-1;lz<=1;lz++){
+      for(let ly=3;ly<=4;ly++){
+        addBlock(x+lx,ly,z+lz,0x2e7d32,'leaf');
+      }
+    }
+  }
+}
+
+function spawnItem(x,y,z){
+  const item=new THREE.Mesh(new THREE.BoxGeometry(0.4,0.4,0.4),new THREE.MeshLambertMaterial({color:0xffff00}));
+  item.position.set(x,y,z);
   scene.add(item);
-  collectibles.push(item);
+  items.push(item);
 }
 
+// controls
 let move={x:0,y:0};
 const base=document.getElementById('moveJoy');
 const stick=document.getElementById('moveStick');
 
-base.addEventListener('touchmove', e=>{
-  const rect=base.getBoundingClientRect();
-  const x=e.touches[0].clientX-rect.left-rect.width/2;
-  const y=e.touches[0].clientY-rect.top-rect.height/2;
-  move.x=x/50; move.y=y/50;
+base.addEventListener('touchmove',e=>{
+  const r=base.getBoundingClientRect();
+  const x=e.touches[0].clientX-r.left-r.width/2;
+  const y=e.touches[0].clientY-r.top-r.height/2;
+  move.x=x/50;move.y=y/50;
   stick.style.left=(35+x/2)+'px';
   stick.style.top=(35+y/2)+'px';
 });
-base.addEventListener('touchend', ()=>{move.x=0;move.y=0;stick.style.left='35px';stick.style.top='35px';});
+base.addEventListener('touchend',()=>{move.x=0;move.y=0;});
 
-let touching=false;
-let lastX=0,lastY=0;
+let touching=false,lastX=0,lastY=0;
+document.addEventListener('touchstart',e=>{
+  const joy = document.getElementById('moveJoy').getBoundingClientRect();
 
-document.addEventListener('touchstart', e=>{
-  if(e.target.id!=='moveJoy'){
-    touching=true;
-    lastX=e.touches[0].clientX;
-    lastY=e.touches[0].clientY;
+  const x = e.touches[0].clientX;
+  const y = e.touches[0].clientY;
+
+  // ❌ Ignore touches inside joystick area
+  if(x > joy.left && x < joy.right && y > joy.top && y < joy.bottom){
+    touching = false;
+    return;
   }
+
+  touching = true;
+  lastX = x;
+  lastY = y;
 });
 
-document.addEventListener('touchmove', e=>{
+document.addEventListener('touchmove',e=>{
   if(touching){
     let dx=e.touches[0].clientX-lastX;
     let dy=e.touches[0].clientY-lastY;
@@ -114,46 +151,51 @@ document.addEventListener('touchmove', e=>{
   }
 });
 
-document.addEventListener('touchend', ()=>touching=false);
+document.addEventListener('touchend',()=>touching=false);
 
-const jumpBtn=document.getElementById('jumpBtn');
-jumpBtn.addEventListener('touchstart', ()=>{
+// jump
+document.getElementById('jumpBtn').addEventListener('touchstart',()=>{
   if(player.grounded){player.velocityY=0.25;player.grounded=false;}
 });
 
-document.addEventListener('click', ()=>{
+// mining
+document.addEventListener('click',()=>{
   raycaster.setFromCamera(center,camera);
-  const hits=raycaster.intersectObjects(scene.children);
-  for(let h of hits){
-    if(h.object.userData.type==='tree'){
-      scene.remove(h.object);
-      spawnItem(h.object.position.x,h.object.position.z);
-      break;
+  const hits=raycaster.intersectObjects(blocks);
+  if(hits.length>0){
+    let b=hits[0].object;
+    scene.remove(b);
+    blocks.splice(blocks.indexOf(b),1);
+    if(b.userData.type==='wood'){
+      spawnItem(b.position.x,b.position.y,b.position.z);
     }
   }
 });
 
-function checkCollision(nx,nz){
-  for(let t of trees){
-    let dx=nx-t.x,dz=nz-t.z;
-    if(Math.sqrt(dx*dx+dz*dz)<player.radius+t.size/2) return true;
+// placing blocks
+document.getElementById('placeBtn').addEventListener('touchstart',()=>{
+  if(wood<=0) return;
+
+  raycaster.setFromCamera(center,camera);
+  const hits=raycaster.intersectObjects(blocks);
+
+  if(hits.length>0){
+    let hit=hits[0];
+    let pos=hit.object.position.clone().add(hit.face.normal);
+
+    addBlock(Math.round(pos.x),Math.round(pos.y),Math.round(pos.z),0x8B4513,'wood');
+    wood--;
+    document.getElementById('inventoryCount').innerText='Wood: '+wood;
   }
-  return false;
-}
+});
 
 function animate(){
   requestAnimationFrame(animate);
 
-  let newX=player.x;
-  let newZ=player.z;
-
-  newX+=Math.sin(rotation.yaw)*move.y*0.1;
-  newZ+=Math.cos(rotation.yaw)*move.y*0.1;
-  newX+=Math.cos(rotation.yaw)*move.x*0.1;
-  newZ-=Math.sin(rotation.yaw)*move.x*0.1;
-
-  if(!checkCollision(newX,player.z)) player.x=newX;
-  if(!checkCollision(player.x,newZ)) player.z=newZ;
+  player.x+=Math.sin(rotation.yaw)*move.y*0.1;
+  player.z+=Math.cos(rotation.yaw)*move.y*0.1;
+  player.x+=Math.cos(rotation.yaw)*move.x*0.1;
+  player.z-=Math.sin(rotation.yaw)*move.x*0.1;
 
   player.velocityY-=0.01;
   player.y+=player.velocityY;
@@ -164,15 +206,15 @@ function animate(){
   camera.rotation.y=rotation.yaw;
   camera.rotation.x=rotation.pitch;
 
-  collectibles.forEach((item,i)=>{
-    item.rotation.y+=0.05;
-    item.position.y=1+Math.sin(Date.now()*0.005)*0.2;
+  items.forEach((it,i)=>{
+    it.rotation.y+=0.05;
+    it.position.y+=Math.sin(Date.now()*0.005)*0.002;
 
-    let dx=player.x-item.position.x;
-    let dz=player.z-item.position.z;
+    let dx=player.x-it.position.x;
+    let dz=player.z-it.position.z;
     if(Math.sqrt(dx*dx+dz*dz)<1){
-      scene.remove(item);
-      collectibles.splice(i,1);
+      scene.remove(it);
+      items.splice(i,1);
       wood++;
       document.getElementById('inventoryCount').innerText='Wood: '+wood;
     }
